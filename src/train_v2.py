@@ -69,7 +69,6 @@ def latest_checkpoint(directory):
 
 
 def train():
-    folder_train = 
     #disentangled
     dataset = BaseDataset_v2('data/train/behaviors_parsed.tsv',
                           'data/train/news_parsed.tsv')
