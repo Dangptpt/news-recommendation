@@ -308,6 +308,127 @@ def evaluate(model, directory, num_workers, max_count=sys.maxsize):
     return np.nanmean(aucs), np.nanmean(mrrs), np.nanmean(ndcg5s), np.nanmean(
         ndcg10s)
 
+@torch.no_grad()
+def predict_test(model, directory, num_workers, max_count=sys.maxsize):
+    """
+    Evaluate model on target directory.
+    Args:
+        model: model to be evaluated
+        directory: the directory that contains two files (behaviors.tsv, news_parsed.tsv)
+        num_workers: processes number for calculating metrics
+    Returns:
+        AUC
+        MRR
+        nDCG@5
+        nDCG@10
+    """
+    news_dataset = NewsDataset(path.join(directory, 'news_parsed.tsv'))
+    news_dataloader = DataLoader(news_dataset,
+                                 batch_size=config.batch_size * 16,
+                                 shuffle=False,
+                                 num_workers=config.num_workers,
+                                 drop_last=False,
+                                 pin_memory=True)
+
+    news2vector = {}
+    news2ids = {}
+    for minibatch in tqdm(news_dataloader,
+                          desc="Calculating vectors for news"):
+        news_ids = minibatch["id"]
+        if any(id not in news2vector for id in news_ids):
+            news_vector = model.get_news_vector(minibatch)
+            for id, vector, new_id in zip(news_ids, news_vector, minibatch["new_id"]):
+                if id not in news2vector:
+                    news2vector[id] = vector
+                if id not in news2ids:
+                    news2ids[id] = new_id
+
+    news2vector['PADDED_NEWS'] = torch.zeros(
+        list(news2vector.values())[0].size())
+    news2ids['PADDED_NEWS'] = torch.zeros(
+        list(news2ids.values())[0].size())
+    # print(news2ids)
+
+    user_dataset = UserDataset(path.join(directory, 'behaviors.tsv'),
+                               'data/train/user2int.tsv')
+    user_dataloader = DataLoader(user_dataset,
+                                 batch_size=config.batch_size * 16,
+                                 shuffle=False,
+                                 num_workers=config.num_workers,
+                                 drop_last=False,
+                                 pin_memory=True)
+
+    user2vector = {}
+    for minibatch in tqdm(user_dataloader,
+                          desc="Calculating vectors for users"):
+        user_strings = minibatch["clicked_news_string"]
+        if any(user_string not in user2vector for user_string in user_strings):
+            clicked_news_vector = torch.stack([
+                torch.stack([news2vector[x].to(device) for x in news_list],
+                            dim=0) for news_list in minibatch["clicked_news"]
+            ],
+                                              dim=0).transpose(0, 1)
+            if model_name == 'LSTUR':
+                user_vector = model.get_user_vector(
+                    minibatch['user'], minibatch['clicked_news_length'],
+                    clicked_news_vector)
+            if model_name in ('NRMS_v2', 'NRMS_v3'):
+                # print('cak')
+                clicked_news_id = torch.concat([
+                    torch.concat([news2ids[x][None, :] for x in news_list], dim = 0)[None, :, :]
+                        for news_list in minibatch["clicked_news"]
+                ], dim = 0)
+                clicked_news_id = torch.tensor(clicked_news_id).permute(1, 0, 2)
+                clicked_news_id = torch.max(clicked_news_id, dim = -1).values.to(torch.long).to(device)
+                user_vector = model.get_user_vector(clicked_news_id, clicked_news_vector)
+                
+            else:
+                user_vector = model.get_user_vector(clicked_news_vector)
+            for user, vector in zip(user_strings, user_vector):
+                if user not in user2vector:
+                    user2vector[user] = vector
+
+    behaviors_dataset = BehaviorsDataset(path.join(directory, 'behaviors.tsv'))
+    behaviors_dataloader = DataLoader(behaviors_dataset,
+                                      batch_size=1,
+                                      shuffle=False,
+                                      num_workers=config.num_workers)
+
+    count = 0
+
+    predictions = []
+
+    for minibatch in tqdm(behaviors_dataloader,
+                          desc="Calculating probabilities"):
+        count += 1
+        if count == max_count:
+            break
+
+        candidate_news_vector = torch.stack([
+            news2vector[news[0].split('-')[0]]
+            for news in minibatch['impressions']
+        ],dim=0)
+        news_id = [news[0].split('-')[0] for news in minibatch['impressions']]
+        user_vector = user2vector[minibatch['clicked_news_string'][0]]
+        click_probability = model.get_prediction(candidate_news_vector,
+                                                 user_vector)
+
+        y_pred = click_probability.tolist()
+        tmp = []
+        for i, news in enumerate(news_id):
+            a = {}
+            a[news] = y_pred[i]
+            tmp.append(a)
+        tmp.sort(key = lambda x : list(x.values())[0], reverse = True)
+        # print(tmp)
+        predictions.append(tmp)
+    
+        
+
+    with open('predictions.txt', 'w') as f:
+        for pred in predictions:
+            f.write(str(pred) + '\n')
+
 
 if __name__ == '__main__':
     print('Using device:', device)
@@ -324,8 +445,9 @@ if __name__ == '__main__':
     checkpoint = torch.load(checkpoint_path)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
-    auc, mrr, ndcg5, ndcg10 = evaluate(model, './data/test',
-                                       config.num_workers)
-    print(
-        f'AUC: {auc:.4f}\nMRR: {mrr:.4f}\nnDCG@5: {ndcg5:.4f}\nnDCG@10: {ndcg10:.4f}'
-    )
+    # auc, mrr, ndcg5, ndcg10 = evaluate(model, './data/test',
+    #                                    config.num_workers)
+    # print(
+    #     f'AUC: {auc:.4f}\nMRR: {mrr:.4f}\nnDCG@5: {ndcg5:.4f}\nnDCG@10: {ndcg10:.4f}'
+    # )
+    predict_test(model, './data/test', config.num_workers)
