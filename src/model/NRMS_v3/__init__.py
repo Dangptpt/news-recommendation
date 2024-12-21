@@ -1,16 +1,16 @@
 import torch
-from model.NRMS_v2.news_encoder import NewsEncoder
-from model.NRMS_v2.user_encoder import UserEncoder
+from model.NRMS_v3.news_encoder import NewsEncoder
+from model.NRMS_v3.user_encoder import UserEncoder
 from model.general.click_predictor.dot_product import DotProductClickPredictor
 
 
-class NRMS_v2(torch.nn.Module):
+class NRMS_v3(torch.nn.Module):
     """
     NRMS network.
     Input 1 + K candidate news and a list of user clicked news, produce the click probability.
     """
     def __init__(self, config, pretrained_word_embedding=None, **kwargs):
-        super(NRMS_v2, self).__init__()
+        super(NRMS_v3, self).__init__()
         self.config = config
         self.news_encoder = NewsEncoder(config, pretrained_word_embedding)
         self.user_encoder = UserEncoder(config, **kwargs)

@@ -5,6 +5,7 @@ from model.general.attention.multihead_self import MultiHeadSelfAttention
 from model.general.attention.additive import AdditiveAttention
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 class ElementEncoder(torch.nn.Module):
     def __init__(self, embedding, linear_input_dim, linear_output_dim):
         super(ElementEncoder, self).__init__()
@@ -30,7 +31,6 @@ class NewsEncoder(torch.nn.Module):
             config.word_embedding_dim, config.num_attention_heads)
         self.additive_attention = AdditiveAttention(config.query_vector_dim,
                                                     config.word_embedding_dim)
-        
         category_embedding = nn.Embedding(config.num_categories,
                                           config.category_embedding_dim,
                                           padding_idx=0)
@@ -39,13 +39,13 @@ class NewsEncoder(torch.nn.Module):
         self.element_encoders = nn.ModuleDict({
             name:
             ElementEncoder(category_embedding, config.category_embedding_dim,
-                           config.num_filters)
+                           config.word_embedding_dim)
             for name in (set(config.dataset_attributes['news'])
                          & set(element_encoders_candidates))
-        })  
+        })
         if len(config.dataset_attributes['news']) > 1:
             self.final_attention = AdditiveAttention(config.query_vector_dim,
-                                                     config.num_filters)
+                                                     config.word_embedding_dim)
 
     def forward(self, news):
         """
@@ -63,6 +63,7 @@ class NewsEncoder(torch.nn.Module):
         news_vector = F.dropout(self.word_embedding(news["title"].to(device)),
                                 p=self.config.dropout_probability,
                                 training=self.training)
+        
         # batch_size, num_words_title, word_embedding_dim
         multihead_news_vector = self.multihead_self_attention(news_vector)
         multihead_news_vector = F.dropout(multihead_news_vector,
@@ -74,10 +75,13 @@ class NewsEncoder(torch.nn.Module):
             encoder(news[name].to(device))
             for name, encoder in self.element_encoders.items()
         ]
-        all_vectors = element_vectors.append(final_news_vector)
-        if len(all_vectors) == 1:
-            final_news_vector = all_vectors[0]
+        
+        element_vectors.append(final_news_vector)
+
+        if len(element_vectors) == 1:
+            final_news_vector = element_vectors[0]
         else:
             final_news_vector = self.final_attention(
-                torch.stack(all_vectors, dim=1))
+                torch.stack(element_vectors, dim=1))
+            
         return final_news_vector
