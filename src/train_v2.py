@@ -122,7 +122,7 @@ def train():
     #disentangled
     else:
         model = Model(config, pretrained_word_embedding).to(device)
-
+        
     if model_name != 'Exp1':
         print(model)
     else:
