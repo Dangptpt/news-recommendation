@@ -28,7 +28,7 @@ class EarlyStopping:
     def __init__(self, patience=5):
         self.patience = patience
         self.counter = 0
-        self.best_loss = np.Inf
+        self.best_loss = np.inf
 
     def __call__(self, val_loss):
         """

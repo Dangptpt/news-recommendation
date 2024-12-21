@@ -56,7 +56,7 @@ class NRMS_v3Config(NRMS_v2Config):
     # For multi-head self-attention
     num_attention_heads = 15
 
-class NRMS_v3Config(NRMS_v2Config):
+class NRMS_1Config(NRMS_v2Config):
     dataset_attributes = {"news": ['title', 'category', 'subcategory'], "record": []}
     # For multi-head self-attention
     num_attention_heads = 15
