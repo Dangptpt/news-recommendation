@@ -25,7 +25,7 @@ class NewsEncoder(torch.nn.Module):
                                                padding_idx=0)
         else:
             self.word_embedding = nn.Embedding.from_pretrained(
-                pretrained_word_embedding, freeze=True, padding_idx=0)
+                pretrained_word_embedding, freeze=False, padding_idx=0)
 
         self.multihead_self_attention = MultiHeadSelfAttention(
             config.word_embedding_dim, config.num_attention_heads)
