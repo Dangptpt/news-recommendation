@@ -3,7 +3,7 @@ import os
 model_name = os.environ['MODEL_NAME'] if 'MODEL_NAME' in os.environ else 'NRMS'
 # Currently included model
 assert model_name in [
-    'NRMS', 'NAML', 'LSTUR', 'DKN', 'HiFiArk', 'TANR', 'Exp1', 'NRMS_v2'
+    'NRMS', 'NAML', 'LSTUR', 'DKN', 'HiFiArk', 'TANR', 'Exp1', 'NRMS_v2', 'NRMS_v3'
 ]
 
 
@@ -51,8 +51,10 @@ class NRMS_v2Config(BaseConfig):
     # For multi-head self-attention
     num_attention_heads = 15
 
-class NRMS_v3Config(NRMS_v2Config):
-    pass
+class NRMS_v3Config(BaseConfig):
+    dataset_attributes = {"news": ['title', 'new_id', 'category', 'subcategory'], "record": []}
+    # For multi-head self-attention
+    num_attention_heads = 15
     
 
 
